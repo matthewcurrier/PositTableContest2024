@@ -1,0 +1,241 @@
+---
+title: "Cost per Click for Paid Search"
+format: 
+  html:
+    html-table-processing: none
+    self-contained: true
+    toc: true
+    toc-depth: 2
+    toc-expand: true
+    toc-location: left
+    code-fold: true
+    code-tools: true
+editor: visual
+
+execute:
+  message: false
+  warning: false
+---
+
+# Introduction
+
+For my entry in the [Posit 2024 table contest](https://posit.co/blog/announcing-the-2024-table-contest/), I wanted to visualize paid search data. Paid search is a type of advertising that refers to the text ads that float at the top of a search engine results page. My particular dataset had results for Google and Bing search and I was curious to see how this data might look after it's been aggregated. I didn't expect that the data would reveal anything super interesting so I saw the contest as more of an opportunity to practice my table building skills in R.
+
+# Why I chose to use the GT package
+
+I considered the [gt](https://gt.rstudio.com/) and [reactable](https://glin.github.io/reactable/) packages for the 2024 Posit table contest.
+
+My preference would have been to use the `reactable` package because I like the ease with which you can dynamically group and aggregate table rows, but with reactable, you often need to get your hands dirty with javascript, which is more of a time suck for because it's outside my comfort zone.
+
+So, I developed my entry using `GT` which I enjoy because of its rich set of functions for creating html tables and extensive documentation.
+
+# Inspirations
+
+There are lots of tutorials and inspiration out there if you develop a table in R using `GT`. To get grounded, I watched a lot of youtube videos. Essentially, everything and anything that was brought up by the following [search query in youtube](https://www.youtube.com/results?search_query=r+gt).
+
+# Final Table
+
+```{r gt-tbl-code}
+library(dplyr)
+library(fontawesome)
+library(gt)
+library(gtExtras)
+library(ggiraph)
+library(ggplot2)
+library(here)
+library(stringr)
+library(tidyr)
+
+
+
+ps_cpc <- read.csv(here('data', 'paid_search_cost_per_click.csv'))
+source(here("r", "my_tbl_theme.R"))
+
+legend <- html('<i>Yes! But that&apos;s where your brand can find new customers</i><div class="align-legend"><pre style="display: inline;font-family: Arial, Verdana, sans-serif; font-size: 15px; text-align: right"><span style="background-color: #00A600;"
+                       >        </span> = Low</pre> <pre style="display: inline;font-family: Arial, Verdana, sans-serif; font-size: 15px; text-align: right"><span style="background-color: #D69C4E;"
+                       >        </span> = Med</pre> <pre style="display: inline;font-family: Arial, Verdana, sans-serif; font-size: 15px; text-align: right"><span style="background-color: brown;"
+                       >        </span> = High</pre></div>')
+
+
+ps_cpc_tbl <- gt(ps_cpc) |>
+  tab_header(
+    title = md("**Cost per click: Are non branded keywords more expensive?**"),
+    # subtitle = md("*Yes! But that's where your brand can find new customers*")
+    subtitle = legend
+  ) |>
+  tab_spanner(
+    label = "Brand",
+    columns = starts_with("b_")
+  ) |>
+  tab_spanner(
+    label = "Non Brand",
+    columns = starts_with("nb_")
+  ) |>
+  cols_hide(
+    columns = c(publisher, device)
+  ) |>
+  cols_align(
+    columns = c(country, publisher, channel_icon, device, device_icon),
+    align = "left"
+  ) |>
+  cols_align(
+    columns = contains("_"),
+    align = "center"
+  ) |>
+  cols_add(
+    whitespace = "",
+    .after = "b_sep"
+  ) |>
+  cols_merge(
+    columns = c(channel_icon, device_icon),
+    pattern = "{1} {2}"
+  ) |>
+  cols_merge(
+    columns = c(country, country_name),
+    pattern = "{1} {2}"
+  ) |>
+  cols_label(
+    country ~ "country",
+    channel_icon ~ "delivery",
+    whitespace ~ md("&emsp;")
+  ) |>
+  cols_width(
+    country ~ px(160),
+    channel_icon ~ px(100),
+    whitespace ~ px(15),
+    everything() ~ px(80)
+  ) |>
+  cols_label_with(
+    columns = where(is.numeric),
+    fn = function(x) {
+      if_else(str_detect(x, "^b_|^nb_"), str_remove(x, "b_|nb_"), x)
+    }
+  ) |>
+  fmt_currency(
+    columns = contains("_"),
+    decimals = 2,
+    currency = "USD"
+  ) |>
+  fmt_flag(
+    columns = country,
+    height = "1.2em"
+  ) |>
+  fmt_icon(
+    columns = c(channel_icon, device_icon),
+    fill_color = "#8C8F93"
+  ) |>
+  sub_values(
+    columns = contains("_"),
+    fn = function(x) if_else(is.nan(x) | is.na(x), TRUE, FALSE),
+    replacement = "-"
+  ) |>
+  data_color(
+    columns = where(is.numeric),
+    palette = c(
+      "#00A600", "#E6E600", "#E8C32E", "#D69C4E", "#Dc863B", "sienna", "sienna4",
+      "tomato4", "brown"
+    ),
+    domain = c(0, 7),
+    na_color = "#FFFFFF",
+    apply_to = "fill"
+  ) |>
+  gt_add_divider(
+    columns = b_may,
+    sides = "left",
+    color = "#D3D3D3",
+    style = "solid",
+    weight = px(2),
+    include_labels = FALSE
+  ) |>
+  tab_style(
+    style = cell_text(
+      align = "left"
+    ),
+    locations = list(
+      cells_body(columns = c(channel_icon, device_icon)),
+      cells_column_labels(columns = c(channel_icon, device_icon))
+    )
+  ) |>
+  opt_table_font(
+    font = c("Arial", default_fonts())
+  ) |>
+  tab_style(
+    style = list(
+      cell_borders(
+        color = "#FFFFFF",
+        weight = px(0))
+    ),
+    locations = list(cells_body(
+      columns = whitespace
+    ), cells_column_labels(
+      columns = whitespace)
+    )
+  ) |>
+  tab_footnote(
+    footnote = html(paste0(fa(name = "microsoft", fill = "#8C8F93"), ' = Bing Search, '),
+                    paste0(fa(name = "google", fill = "#8C8F93"), ' = Google Search, '),
+                    paste0(fa(name = "desktop", fill = "#8C8F93"), ' = Desktop, '),
+                    paste0(fa(name = "mobile", fill = "#8C8F93"), ' = Mobile')),
+    locations = cells_column_labels(columns = channel_icon)
+  ) |> 
+  opt_css(
+    css = '
+     .align-legend {
+      text-align: right;
+    }
+    '
+  ) |> 
+  my_tbl_theme() 
+```
+
+::: column-page
+```{r print-final-table}
+#| code-fold: false
+#| echo: false
+ps_cpc_tbl
+```
+:::
+
+# Color considerations
+
+For the color scheme, I borrowed from [Grant Chalmer's Twitter post](https://twitter.com/GrantChalmers/status/1774924163834335335). While the administration of a color palette in GT is straightforward, it was setting the bounds for the color palette that took more thinking.
+
+In the particular case of my dataset, if I had more data, I would have wanted to study the distribution of cost per click over years rather than a few select months. That said, a few quick visualizations of the cost per click distribution in the data can be useful for understanding how you want to implement your color scale. 
+
+::: panel-tabset
+### Deciles
+
+```{r deciles}
+ps_cpc_narrow <- ps_cpc |> 
+  pivot_longer(b_may:nb_sep) |> 
+  mutate(decile = ntile(value, n = 10),
+         value = round(value, digits = 2))
+
+gg_point <- ggplot(data = ps_cpc_narrow) + 
+  geom_point_interactive(aes(x = decile, y = value, tooltip = sprintf(value, fmt = '$ %#.2f'))) +
+  ylab("Cost per Click") +
+  theme_minimal() +
+  ggtitle("Distribution of cost per click broken down into deciles") 
+
+girafe(ggobj = gg_point)
+
+```
+
+### Density
+
+```{r}
+ggplot(ps_cpc_narrow, aes(x = value)) + 
+  geom_density() +
+  xlab("cost per click") +
+  theme_minimal()
+```
+:::
+
+
+# Challenges in building table
+
+**Merge columns** - I wanted to turn on the interactive html option for the table but I found that some features such as merging columns would break the table. As a result, I opted to leave the interactive html turned off. Generally speaking, I found the ihtml option to be sensitive in that it breaks easily. For me, the most useful interactive feature for my table would have been the table sort feature.
+
+**Adding a color legend** - For my legend, I searched the Posit message boards and ended up modifying a snippet from [here](https://forum.posit.co/t/trying-to-add-legend-to-gt-table/172872).
+
+
