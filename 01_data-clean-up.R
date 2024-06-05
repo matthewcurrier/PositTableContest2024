@@ -1,12 +1,12 @@
 library(readxl)
 library(here)
-library(tidyverse)
+library(stringr)
+library(tidyr)
+library(dplyr)
 library(janitor)
 library(gt)
 library(gtExtras)
 library(countrycode)
-
-
 
 cc <- countrycode::codelist_panel |> # To help get a short code for each country in dataset
   select(
